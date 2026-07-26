@@ -1,0 +1,17 @@
+{
+  "name": "TokenService Dev Container (mise)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/tokenservice",
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "zxh43.vscode-proto3"
+      ]
+    }
+  }
+}
