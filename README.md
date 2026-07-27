@@ -208,18 +208,134 @@ asyncio.run(main())
 
 ## 5. Client Cache & Invalidation Architecture
 
-1. **Local Cache Read Path**:
+### 1. **Local Cache Read Path**:
    - `verify_token(token)` checks the client's thread-safe in-memory cache.
    - **Cache Hit**: Returns `UserId` instance immediately without hitting the network.
    - **Cache Miss**: Issues a `VerifyToken` gRPC call to `TokenService`. On success, deserializes bytes back into `UserId` and stores result in the local cache bound by **`with_local_cache_ttl`**.
 
-2. **Real-Time Revocation Streaming**:
+### 2. **Real-Time Revocation Streaming**:
    - The client maintains a background `SubscribeRevocations` gRPC stream.
    - When any manager node revokes a token, it broadcasts the revocation over Redis Pub/Sub to all manager instances.
    - Manager instances push `RevocationEvent` messages down active gRPC streams.
    - Client instances receive the event and instantly drop the token from their local cache.
 
-3. **Self-Healing Reconnection & Lost Message Warning**:
-   - If the gRPC stream drops due to network flicker, the client enters an exponential backoff reconnect loop.
+### 3. **Self-Healing Reconnection & Lost Message Warning**:
+   - If the gRPC stream drops due to network flicker or server failure, the client enters an exponential backoff reconnect loop. The client will attempt to reconnect to the server indefinitely (capped at `max_delay`) and will never stop retrying.
    - **Crucial Warning**: Revocation events broadcast during a network stream outage are **lost** for that disconnected client instance.
    - To bound security exposure during network outages, applications **must not rely on long-lived tokens or long `local_cache_ttl` values**. Short `local_cache_ttl` safety windows ensure any cached tokens naturally expire and re-verify against the server shortly after an outage.
+
+### 4. **Error Hierarchy & Disconnect Types**:
+    - TokenService distinguishes between application-level verification states and network/infrastructure failures.
+        - ServiceDisconnected: The client cannot communicate with the TokenService gRPC node (network down, stream reconnecting).
+        - StorageDisconnected: TokenService is reachable, but its underlying storage engine (Redis) is down or unreachable.
+        
+#### Rust Error Types (TokenServiceError):
+
+```rust
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum TokenServiceError {
+    #[error("Failed to communicate with TokenService gRPC server")]
+    ServiceDisconnected,
+    #[error("TokenService storage backend (Redis) is unreachable")]
+    StorageDisconnected,
+    #[error("Invalid token format or length")]
+    InvalidTokenFormat,
+}
+```
+
+#### Python Exceptions
+In Python, infrastructure failures are raised as native exceptions:
+
+```python
+class TokenServiceError(Exception):
+    """Base exception for TokenService client errors."""
+    pass
+
+class ServiceDisconnectedError(TokenServiceError):
+    """Raised when the gRPC server connection is broken or reconnecting."""
+    pass
+
+class StorageDisconnectedError(TokenServiceError):
+    """Raised when the underlying Redis storage backend is offline."""
+    pass
+```
+
+### 5. **Verification Result Types (VerificationResult)**:
+    - To prevent network or storage outages from obscuring the difference between an expired/invalid token and a degraded local cache hit, verify_token returns a structured result enum:
+
+#### Rust Specification:
+
+```rust #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerificationResult<U> {
+    /// Token verified successfully against server or active gRPC stream-backed cache.
+    Valid(U),
+    /// Token found in local cache, but server/storage is currently DISCONNECTED.
+    /// Served under 'with_local_cache_ttl' safety window.
+    ValidDegraded(U),
+    /// Token is explicitly invalid, revoked, or expired.
+    Invalid,
+}
+```
+
+#### Python Specification:
+
+```python
+from dataclasses import dataclass
+from typing import Generic, TypeVar, Optional
+
+U = TypeVar("U", bound=UserId)
+
+@dataclass(frozen=True)
+class VerificationResult(Generic[U]):
+    user: Optional[U]
+    is_valid: bool
+    is_degraded: bool
+
+    @classmethod
+    def valid(cls, user: U) -> "VerificationResult[U]":
+        return cls(user=user, is_valid=True, is_degraded=False)
+
+    @classmethod
+    def valid_degraded(cls, user: U) -> "VerificationResult[U]":
+        return cls(user=user, is_valid=True, is_degraded=True)
+
+    @classmethod
+    def invalid(cls) -> "VerificationResult[U]":
+        return cls(user=None, is_valid=False, is_degraded=False)
+```
+
+### 6. Method Contracts & Disconnect Behavior Matrix
+
+#### `verify_token`
+
+**Signatures:**
+
+* **Rust:** `async fn verify_token(&self, token: &T) -> Result<VerificationResult<U>, TokenServiceError>`
+* **Python:** `async def verify_token(self, token: T) -> VerificationResult[U]` *(Raises `TokenServiceError` on network/storage failure)*
+
+| Cache State | Connected | Service Disconnected | Storage Disconnected |
+| :--- | :--- | :--- | :--- |
+| **Local Cache Hit** | `Valid(User)` | `ValidDegraded(User)` *(within `local_cache_ttl`)* | `ValidDegraded(User)` *(within `local_cache_ttl`)* |
+| **Local Cache Miss (Token Valid)** | `Valid(User)` *(caches locally)* | `Err(ServiceDisconnected)` | `Err(StorageDisconnected)` |
+| **Local Cache Miss (Token Revoked/Expired)** | `Invalid` | `Err(ServiceDisconnected)` | `Err(StorageDisconnected)` |
+
+#### `issue_token` & `revoke_token`
+
+Mutating operations require write confirmation from the storage engine and cannot be served from local cache.
+
+**Signatures:**
+
+* **Rust:**
+* `async fn issue_token(&self, user_id: &U) -> Result<T, TokenServiceError>;`
+* `async fn revoke_token(&self, token: &T) -> Result<(), TokenServiceError>;`
+
+
+* **Python:**
+* `async def issue_token(self, user_id: U) -> T:` *(Raises `TokenServiceError` on failure)*
+* `async def revoke_token(self, token: T) -> None:` *(Raises `TokenServiceError` on failure)*
+
+
+**Behavior:**
+
+* **Service Down** $\rightarrow$ Returns `Err(TokenServiceError::ServiceDisconnected)` / raises `ServiceDisconnectedError`.
+* **Redis Down** $\rightarrow$ Returns `Err(TokenServiceError::StorageDisconnected)` / raises `StorageDisconnectedError`.
