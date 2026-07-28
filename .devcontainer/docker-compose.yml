@@ -5,6 +5,7 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspaces/tokenservice:cached
+      - ssh-data:/home/vscode/.ssh
     command: sleep infinity
 
   redis:
@@ -16,3 +17,4 @@ services:
 
 volumes:
   redis-data:
+  ssh-data:

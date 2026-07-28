@@ -16,5 +16,6 @@
         "zxh43.vscode-proto3"
       ]
     }
-  }
+  },
+  "postCreateCommand": "bash .devcontainer/setup-ssh.sh"
 }
