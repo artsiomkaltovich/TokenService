@@ -5,6 +5,9 @@
   "workspaceFolder": "/workspaces/tokenservice",
   "containerUser": "vscode",
   "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
   "customizations": {
     "vscode": {
       "extensions": [

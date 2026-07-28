@@ -1,0 +1,113 @@
+===============================================================================
+TOKENSERVICE TEST SCENARIOS SPECIFICATION
+===============================================================================
+
+ENVIRONMENT & CONFIGURATION
+- Redis URL: redis://127.0.0.1:6379
+- Replica A: http://127.0.0.1:5111
+- Replica B: http://127.0.0.1:5112
+- Replica C: http://127.0.0.1:5113
+- Test User ID: UUID "936da01f-9abd-4d9d-80c7-02af85c822a8" (16 bytes)
+- Token Types: Token16 (16 bytes payload), Token32 (32 bytes payload)
+
+-------------------------------------------------------------------------------
+MULTI-REPLICA INTEGRATION TESTS (RUST)
+-------------------------------------------------------------------------------
+
+TEST: Cross-Replica Read (Shared Redis Storage)
+  Setup:
+    - Shared Redis running at 127.0.0.1:6379.
+    - Replica A at 127.0.0.1:5111, Replica B at 127.0.0.1:5112.
+    - Client A connected to Replica A; Client B connected to Replica B.
+  Action:
+    1. Client A calls issue_token(User1) on Replica A -> gets Token16.
+    2. Client B calls verify_token(Token16) on Replica B.
+  Assert:
+    - Client B verify_token returns VerificationResult::Valid(User1).
+
+TEST: Cross-Replica Revocation Push (Redis Pub/Sub)
+  Setup:
+    - Shared Redis running at 127.0.0.1:6379.
+    - Replica A at 127.0.0.1:5111, Replica B at 127.0.0.1:5112.
+    - Client A connected to Replica A; Client B connected to Replica B.
+  Action:
+    1. Client A calls issue_token(User1) on Replica A -> gets Token16.
+    2. Client B calls verify_token(Token16) on Replica B -> populates Client B local cache.
+    3. Client A calls revoke_token(Token16) on Replica A.
+    4. Wait up to 1s for redis pub/sub and gRPC revocation stream push to Client B.
+    5. Client B calls verify_token(Token16).
+  Assert:
+    - Client B's local cache is dropped via gRPC stream push.
+    - Client B verify_token returns VerificationResult::Invalid.
+
+TEST: Multi-Client Revocation Broadcast
+  Setup:
+    - Shared Redis at 127.0.0.1:6379.
+    - Replica A at 127.0.0.1:5111, Replica B at 127.0.0.1:5112, Replica C at 127.0.0.1:5113.
+    - Client A on Replica A, Client B on Replica B, Client C on Replica C.
+  Action:
+    1. Client A issues Token16.
+    2. Client B and Client C both verify and cache Token16.
+    3. Client A revokes Token16 on Replica A.
+    4. Wait up to 1s.
+  Assert:
+    - Both Client B and Client C receive revocation push via their respective replica streams.
+    - Both Client B and Client C local caches are evicted.
+    - Subsequent verify_token on Client B and C returns VerificationResult::Invalid.
+
+TEST: Late-Joining Replica Pub/Sub Subscription
+  Setup:
+    - Shared Redis at 127.0.0.1:6379.
+    - Replica A running at 127.0.0.1:5111.
+  Action:
+    1. Client A issues Token16 on Replica A.
+    2. Start Replica B at 127.0.0.1:5112 (starts after token was issued).
+    3. Client B connects to Replica B and verifies Token16 -> cached in Client B.
+    4. Client A revokes Token16 on Replica A.
+  Assert:
+    - Client B receives revocation push from Replica B.
+    - Subsequent verify_token on Client B returns VerificationResult::Invalid.
+
+TEST: Replica Send Revocation to All Connected Clients
+  Setup:
+    - Shared Redis at 127.0.0.1:6379.
+    - Replica A running at 127.0.0.1:5111.
+    - Clients A, B, and C connected to Replica A.
+  Action:
+    1. Client A issues Token16 on Replica A.
+    2. Client B and Client C verify and cache the token.
+    3. Client A revokes Token16 on Replica A.
+  Assert:
+    - Clients B and C receive revocation push.
+    - Subsequent verify_token on Clients B and C returns VerificationResult::Invalid.
+
+TEST: Verification with Disconnected Redis (Cached Degraded Hit)
+  Setup:
+    - Shared Redis running at 127.0.0.1:6379.
+    - Replica A running at 127.0.0.1:5111.
+    - Client A connected to Replica A.
+  Action:
+    1. Issue Token16 for User1.
+    2. Call verify_token(Token16) -> populates local cache.
+    3. Disconnect Redis server (or simulate Redis failure on Replica A).
+    4. Call verify_token(Token16).
+  Assert:
+    - Client A returns VerificationResult::ValidDegraded(User1) directly from local cache.
+
+TEST: Load Verification Under High Concurrency
+  Setup:
+    - Shared Redis at 127.0.0.1:6379.
+    - Replica A running at 127.0.0.1:5111.
+    - Replica B running at 127.0.0.1:5112.
+    - Replica C running at 127.0.0.1:5113.
+  Action:
+    1. Start 100 clients for every replica (300 total).
+    2. For 1 minute, run operations concurrently in random order:
+      a. 20% of load: generate new token (`issue_token`).
+      b. 5% of load: revoke a token (`revoke_token`).
+      c. 75% of load: verify existing tokens (`verify_token`).
+  Assert:
+    - No unexpected unhandled exceptions or panic crashes occur.
+    - Total number of creations > 1,000.
+    - Total number of revocations > 100.
+    - Total number of verifications > 10,000.
