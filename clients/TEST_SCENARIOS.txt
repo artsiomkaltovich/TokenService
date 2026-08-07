@@ -146,7 +146,7 @@ TEST: Uncached Verify Miss Fails on Service Disconnect
 TEST: Issue Token Fails on Service Disconnect
   Setup: Client connected to 127.0.0.1:5111.
   Action:
-    1. Stop gRPC server process.
+    1. Pause gRPC server process.
     2. Call issue_token(User1).
   Assert:
     - Returns Err(TokenServiceError::ServiceDisconnected) / raises ServiceDisconnectedError.
@@ -154,7 +154,7 @@ TEST: Issue Token Fails on Service Disconnect
 TEST: Revoke Token Fails on Service Disconnect
   Setup: Client connected to 127.0.0.1:5111.
   Action:
-    1. Stop gRPC server process.
+    1. Pause gRPC server process.
     2. Call revoke_token(Token16).
   Assert:
     - Returns Err(TokenServiceError::ServiceDisconnected) / raises ServiceDisconnectedError.
@@ -179,3 +179,44 @@ TEST: Revoke Token Fails on Storage Disconnect
     1. Call revoke_token(Token16).
   Assert:
     - Returns Err(TokenServiceError::StorageDisconnected) / raises StorageDisconnectedError.
+
+-------------------------------------------------------------------------------
+CLIENT TIMEOUT TESTS
+-------------------------------------------------------------------------------
+
+TEST: Custom Timeout Default Applies to All Operations
+  Setup: Server running at 127.0.0.1:5111.
+  Action:
+    1. Create TokenServiceClient with timeout=10.0 seconds.
+    2. Call issue_token(User1).
+    3. Call verify_token(returned_token).
+    4. Call revoke_token(returned_token).
+  Assert:
+    - All operations complete within the specified timeout.
+    - All operations complete without timeout/disconnection errors.
+
+NOTE: Timeouts are treated as service/storage disconnections.
+  - Tests that simulate slow or hanging servers should assert ServiceDisconnectedError or StorageDisconnectedError as appropriate.
+
+TEST: Timeout on Slow Server
+  Setup: Server running at 127.0.0.1:5111 with induced artificial delay > timeout value.
+  Action:
+    1. Create TokenServiceClient with timeout=0.5 seconds.
+    2. Call issue_token(User1).
+    3. Call verify_token(returned_token).
+    4. Call revoke_token(returned_token).
+  Assert:
+    - Every request times out after 0.5 seconds (including all backoff/retry attempts).
+    - Every request times out before 1 second (including all backoff/retry attempts).
+    - Every request raises ServiceDisconnectedError / returns Err(TokenServiceError::ServiceDisconnected) since the server cannot distinguish timeout from disconnection.
+
+TEST: Timeout Does Not Affect Local Cache Hits
+  Setup: Server running at 127.0.0.1:5111. Client configured with timeout=1 second and local_cache_ttl=60 seconds.
+  Action:
+    1. Issue Token16 and call verify_token(Token16) -> populates local cache.
+    2. Stop the server.
+    3. Call verify_token(Token16) again (should hit local cache).
+  Assert:
+    - Cached verification returns VerificationResult::ValidDegraded(User1) without timeout error.
+    - Cached verification took less then 1 second to complete.
+    - Timeout only applies to network requests, not cache lookups.

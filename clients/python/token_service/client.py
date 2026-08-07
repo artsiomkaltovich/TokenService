@@ -13,13 +13,15 @@ class TokenServiceClient:
 
     def __init__(
         self,
-        server_url: str = "http://127.0.0.1:5111",
+        server_url: str,
+        timeout: float,
         token_type: TokenType = TokenType.TOKEN16,
         ttl: float | None = None,
         local_cache_ttl: float = 60.0,
         backoff_max_delay: float = 0.5,
     ) -> None:
         self.server_url = server_url
+        self.timeout = timeout
         self.token_type = token_type
         self.ttl = ttl
         self.local_cache_ttl = local_cache_ttl

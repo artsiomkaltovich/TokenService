@@ -34,7 +34,9 @@ impl UserId for UserUUID {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Connect client generic over [UserUUID, Token16]
-    let client = TokenClient::<UserUUID, Token16>::builder("http://127.0.0.1:50051")
+    let client = TokenClient::<UserUUID, Token16>::builder(
+        "http://127.0.0.1:50051", Duration::from_secs(30)
+    )
         .build()
         .await?;
 
@@ -76,7 +78,7 @@ async def main():
     # 2. Build client generic over [UserUUID, Token16]
     #    (mypy/pyright infers UserUUID & Token16 directly from type annotation or generic Builder)
     async with TokenClientBuilder[UserUUID, Token16](
-        "127.0.0.1:50051"
+        "127.0.0.1:50051", timedelta(seconds=30)
     ).build() as client:
         # 3. Issue a 16-byte session token (inherits client default token_ttl)
         user_id = UserUUID(UUID("936da01f-9abd-4d9d-80c7-02af85c822a8"))
@@ -121,7 +123,9 @@ impl UserId for CustomUserId {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure client generic over [CustomUserId, Token32]
-    let client = TokenClient::<CustomUserId, Token32>::builder("http://127.0.0.1:50051")
+    let client = TokenClient::<CustomUserId, Token32>::builder(
+        "http://127.0.0.1:50051", Duration::from_secs(30)
+    )
         // Default TTL for created tokens on the server (Redis)
         .with_token_ttl(Duration::from_secs(7200))
         // Maximum local cache TTL safety window (prevents stale cache if disconnected)
@@ -170,7 +174,7 @@ class CustomUserId(UserId):
 async def main():
     # Properly typed for mypy/pyright via Generic Builder parametrization
     client = (
-        TokenClientBuilder[CustomUserId, Token32]("127.0.0.1:50051")
+        TokenClientBuilder[CustomUserId, Token32]("127.0.0.1:50051", timedelta(seconds=30))
         .with_token_ttl(timedelta(hours=2))  # Server TTL for issued tokens
         .with_local_cache_ttl(
             timedelta(minutes=2)
