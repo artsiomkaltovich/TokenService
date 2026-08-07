@@ -71,11 +71,13 @@ class UserUUID(UserId):
     def from_bytes(cls, data: bytes) -> "UserUUID":
         return cls(UUID(bytes=data))
 
+
 async def main():
     # 2. Build client generic over [UserUUID, Token16]
     #    (mypy/pyright infers UserUUID & Token16 directly from type annotation or generic Builder)
-    async with TokenClientBuilder[UserUUID, Token16]("127.0.0.1:50051").build() as client:
-        
+    async with TokenClientBuilder[UserUUID, Token16](
+        "127.0.0.1:50051"
+    ).build() as client:
         # 3. Issue a 16-byte session token (inherits client default token_ttl)
         user_id = UserUUID(UUID("936da01f-9abd-4d9d-80c7-02af85c822a8"))
         token: Token16 = await client.issue_token(user_id)
@@ -84,6 +86,7 @@ async def main():
         verified_user: UserUUID | None = await client.verify_token(token)
         if verified_user:
             print(f"Authenticated User: {verified_user.value}")
+
 
 asyncio.run(main())
 ```
@@ -149,6 +152,7 @@ import asyncio
 from datetime import timedelta
 from token_service import TokenClientBuilder, Token32, UserId, BackoffConfig
 
+
 class CustomUserId(UserId):
     def __init__(self, user_num: int):
         if user_num <= 0:
@@ -162,28 +166,34 @@ class CustomUserId(UserId):
     def from_bytes(cls, data: bytes) -> "CustomUserId":
         return cls(int.from_bytes(data, byteorder="big"))
 
+
 async def main():
     # Properly typed for mypy/pyright via Generic Builder parametrization
     client = (
         TokenClientBuilder[CustomUserId, Token32]("127.0.0.1:50051")
-        .with_token_ttl(timedelta(hours=2))          # Server TTL for issued tokens
-        .with_local_cache_ttl(timedelta(minutes=2))   # Safety eviction TTL for local cache
-        .with_reconnect_backoff(BackoffConfig(
-            min_delay=timedelta(milliseconds=100), 
-            max_delay=timedelta(seconds=10), 
-            factor=2.0),
+        .with_token_ttl(timedelta(hours=2))  # Server TTL for issued tokens
+        .with_local_cache_ttl(
+            timedelta(minutes=2)
+        )  # Safety eviction TTL for local cache
+        .with_reconnect_backoff(
+            BackoffConfig(
+                min_delay=timedelta(milliseconds=100),
+                max_delay=timedelta(seconds=10),
+                factor=2.0,
+            ),
         )
         .build()
     )
 
     async with client:
         user = CustomUserId(10042)
-        
+
         # Uses client default token_ttl (2 hours)
         token: Token32 = await client.issue_token(user)
 
         # Explicitly revoke token
         await client.revoke_token(token)
+
 
 asyncio.run(main())
 ```
@@ -249,14 +259,19 @@ In Python, infrastructure failures are raised as native exceptions:
 ```python
 class TokenServiceError(Exception):
     """Base exception for TokenService client errors."""
+
     pass
+
 
 class ServiceDisconnectedError(TokenServiceError):
     """Raised when the gRPC server connection is broken or reconnecting."""
+
     pass
+
 
 class StorageDisconnectedError(TokenServiceError):
     """Raised when the underlying Redis storage backend is offline."""
+
     pass
 ```
 
@@ -284,6 +299,7 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar, Optional
 
 U = TypeVar("U", bound=UserId)
+
 
 @dataclass(frozen=True)
 class VerificationResult(Generic[U]):

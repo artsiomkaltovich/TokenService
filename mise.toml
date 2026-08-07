@@ -2,3 +2,13 @@
 python = "3.11"
 rust = "1.96"
 protobuf = "35.0"
+uv = "0.12.2"
+
+[tasks]
+"test:python" = "cd clients/python && uv run pytest"
+"lint:python" = "cd clients/python && uv run ruff check ."
+"typecheck:python" = "cd clients/python && uv run mypy ."
+"format:python" = "cd clients/python && uv run ruff format ."
+
+[tasks."check:python"]
+depends = ["lint:python", "typecheck:python", "test:python"]
