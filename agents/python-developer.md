@@ -17,3 +17,7 @@ Instructions from `agents/general-developer.md` apply here.
 4. **Testing & Correctness**:
    - Implement client scenarios described in `clients/TEST_SCENARIOS.txt` for Python under `clients/python/`.
    - Handle gRPC connections, local cache expiration, token verification, and error states gracefully according to specification.
+
+## Formatting and Linting:
+
+- Run the `mise run check:python` at the end, fix any issues it finds.
