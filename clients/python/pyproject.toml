@@ -4,13 +4,16 @@ version = "0.1.0"
 description = "TokenService Python Client SDK"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "testcontainers>=4.0.0,<5.0.0",
+    "requests>=2.0.0,<3.0.0",
     "pytest>=9.0.0,<10.0.0",
-    "pytest-asyncio>=1.4.0,<2.0.0",
+    "pytest-asyncio>=1.0.0,<2.0.0",
     "ruff>=0.16.0,<0.17.0",
-    "mypy>=2.3.0,<3.0.0",
-    # Testcontainers is optional in CI — used to run an image named 'tokenservice:local' when available
-    "testcontainers>=4.15.0,<5.0.0",
+    "mypy>=2.0.0,<3.0.0",
 ]
 
 [build-system]
@@ -40,3 +43,4 @@ strict = true
 # Suppress type-stub errors for 3rd-party imports lacking py.typed
 ignore_missing_imports = true
 files = ["token_service"]
+
