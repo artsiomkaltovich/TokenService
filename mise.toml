@@ -8,7 +8,7 @@ uv = "0.12.2"
 "test:python" = "cd clients/python && uv run pytest"
 "lint:python" = "cd clients/python && uv run ruff check ."
 "typecheck:python" = "cd clients/python && uv run mypy ."
-"format:python" = "cd clients/python && uv run ruff check --fix . && uv run ruff format ."
+"format:python" = "cd clients/python && uv run ruff format . && uv run ruff check --fix ."
 
 [tasks."check:python"]
 depends = ["lint:python", "typecheck:python", "test:python"]
