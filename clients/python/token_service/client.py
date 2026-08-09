@@ -1,5 +1,5 @@
 from types import TracebackType
-from typing import Self
+from typing import Generic, Self, TypeVar
 from uuid import UUID
 
 from token_service.models import (
@@ -7,22 +7,22 @@ from token_service.models import (
     VerificationResult,
 )
 
+T = TypeVar("T", bound=TokenType)
 
-class TokenServiceClient:
+
+class TokenServiceClient(Generic[T]):
     """Client SDK for interacting with TokenService."""
 
     def __init__(
         self,
         server_url: str,
         timeout: float,
-        token_type: TokenType = TokenType.TOKEN16,
         ttl: float | None = None,
         local_cache_ttl: float = 60.0,
         backoff_max_delay: float = 0.5,
     ) -> None:
         self.server_url = server_url
         self.timeout = timeout
-        self.token_type = token_type
         self.ttl = ttl
         self.local_cache_ttl = local_cache_ttl
         self.backoff_max_delay = backoff_max_delay
@@ -51,14 +51,14 @@ class TokenServiceClient:
     async def issue_token(
         self,
         user_id: UUID | str,
-    ) -> bytes:
+    ) -> T:
         """Issue a token for the specified user."""
         raise NotImplementedError("TokenServiceClient is not implemented yet")
 
-    async def verify_token(self, token: bytes) -> VerificationResult:
+    async def verify_token(self, token: T) -> VerificationResult:
         """Verify the validity of a token."""
         raise NotImplementedError("TokenServiceClient is not implemented yet")
 
-    async def revoke_token(self, token: bytes) -> None:
+    async def revoke_token(self, token: T) -> None:
         """Revoke an issued token."""
         raise NotImplementedError("TokenServiceClient is not implemented yet")

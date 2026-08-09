@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+    depends_on:
+      - redis
     volumes:
       - ..:/workspaces/tokenservice:cached
       - ssh-data:/home/vscode/.ssh

@@ -1,11 +1,21 @@
 from dataclasses import dataclass
-from enum import Enum
 from uuid import UUID
 
 
-class TokenType(Enum):
-    TOKEN16 = "token16"
-    TOKEN32 = "token32"
+class TokenType:
+    pass
+
+
+class Token16(TokenType):
+    def __init__(self, value: bytes):
+        assert len(value) == 16
+        self._value = value
+
+
+class Token32(TokenType):
+    def __init__(self, value: bytes):
+        assert len(value) == 32
+        self._value = value
 
 
 @dataclass(frozen=True)

@@ -89,6 +89,20 @@ TEST 1.8: Independent Token Revocation
     - T1 verification (step 4) returns VerificationResult::Invalid.
     - T2 verification (step 4) returns VerificationResult::Valid(User1).
 
+TEST 1.9: Cached Tokens Do Not Outlive Server-Side Tokens
+  Setup: Server running at 127.0.0.1:5111 (server default TTL = 3 seconds). Client configured with local_cache_ttl = 60 seconds.
+  Action:
+    1. Issue Token16 for User1.
+    2. Sleep for 2 seconds.
+    3. Close client.
+    4. Start new client.
+    5. Call verify_token(Token16) -> hits server, caches locally with remaining server TTL = 1s.
+    6. Sleep for 2 seconds.
+    7. Call verify_token(Token16) -> reads local cache.
+  Assert:
+    - First verify_token (step 5) returns VerificationResult::Valid(User1).
+    - Second verify_token (step 7) returns VerificationResult::Invalid (cache evicted via remaining server TTL bound).
+
 -------------------------------------------------------------------------------
 CONNECTION FAILURE & RECOVERY TESTS
 -------------------------------------------------------------------------------
@@ -103,21 +117,7 @@ TEST 2.1: Local In-Memory Cache Hit
   Assert:
     - Second verify_token returns VerificationResult::ValidDegraded(User1) without network call.
 
-TEST 2.2: Cached Tokens Do Not Outlive Server-Side Tokens
-  Setup: Server running at 127.0.0.1:5111 (server default TTL = 3 seconds). Client configured with local_cache_ttl = 60 seconds.
-  Action:
-    1. Issue Token16 for User1.
-    2. Sleep for 2 seconds.
-    3. Close client.
-    4. Start new client.
-    5. Call verify_token(Token16) -> hits server, caches locally with remaining server TTL = 1s.
-    6. Sleep for 2 seconds.
-    7. Call verify_token(Token16) -> reads local cache.
-  Assert:
-    - First verify_token (step 5) returns VerificationResult::Valid(User1).
-    - Second verify_token (step 7) returns VerificationResult::Invalid (cache evicted via remaining server TTL bound).
-
-TEST 2.3: Stream Outage & Safety TTL Eviction
+TEST 2.2: Stream Outage & Safety TTL Eviction
   Setup: Server running at 127.0.0.1:5111. Client configured with local_cache_ttl = 1 second.
   Action:
     1. Issue Token16 and call verify_token(Token16) -> populates local cache.
@@ -128,18 +128,21 @@ TEST 2.3: Stream Outage & Safety TTL Eviction
     - Local cache entry expires naturally after 2 seconds.
     - Re-verification attempt fails and throws/returns TokenServiceError::ServiceDisconnected.
 
-TEST 2.4: Client gRPC Stream Auto-Reconnect
-  Setup: Server running at 127.0.0.1:5111. Client with backoff max_delay = 500ms.
+TEST 2.3: Client gRPC Stream Auto-Reconnect
+  Setup: Server running at 127.0.0.1:5111. Client with backoff max_delay = 1s.
   Action:
-    1. Client connects and starts SubscribeRevocations stream.
-    2. Temporarily stop/restart server process to break stream.
-    3. Wait 1 second for client exponential backoff reconnect loop to establish new stream.
-    4. Issue and revoke Token16 on restarted server.
+    1. client1 issues token
+    2. client2 verifies & caches token locally
+    3. simulate stream disconnect for client2
+    4. sleep 2 seconds
+    5. client1 revokes token on server
+    6. client2 checks token
   Assert:
-    - Client automatically re-establishes gRPC stream without throwing error.
-    - Client receives revocation event over re-established stream.
+    - client 2 returns VerificationResult::Valid(User1) (Step 2).
+    - client 2 reistablishes stream
+    - client 2 returns VerificationResult::Invalid(User1) (Step 6).
 
-TEST 2.5: Uncached Verify Miss Fails on Service Disconnect
+TEST 2.4: Uncached Verify Miss Fails on Service Disconnect
   Setup: Client connected to 127.0.0.1:5111.
   Action:
     1. Stop gRPC server process.
@@ -147,7 +150,7 @@ TEST 2.5: Uncached Verify Miss Fails on Service Disconnect
   Assert:
     - Returns Err(TokenServiceError::ServiceDisconnected) / raises ServiceDisconnectedError.
 
-TEST 2.6: Issue Token Fails on Service Disconnect
+TEST 2.5: Issue Token Fails on Service Disconnect
   Setup: Client connected to 127.0.0.1:5111.
   Action:
     1. Pause gRPC server process.
@@ -155,7 +158,7 @@ TEST 2.6: Issue Token Fails on Service Disconnect
   Assert:
     - Returns Err(TokenServiceError::ServiceDisconnected) / raises ServiceDisconnectedError.
 
-TEST 2.7: Revoke Token Fails on Service Disconnect
+TEST 2.6: Revoke Token Fails on Service Disconnect
   Setup: Client connected to 127.0.0.1:5111.
   Action:
     1. Pause gRPC server process.
@@ -163,21 +166,21 @@ TEST 2.7: Revoke Token Fails on Service Disconnect
   Assert:
     - Returns Err(TokenServiceError::ServiceDisconnected) / raises ServiceDisconnectedError.
 
-TEST 2.8: Uncached Verify Miss Fails on Storage Disconnect
+TEST 2.7: Uncached Verify Miss Fails on Storage Disconnect
   Setup: Server running at 127.0.0.1:5111, but Redis stopped at 127.0.0.1:6379.
   Action:
     1. Call verify_token(uncached_token).
   Assert:
     - Returns Err(TokenServiceError::StorageDisconnected) / raises StorageDisconnectedError.
 
-TEST 2.9: Issue Token Fails on Storage Disconnect
+TEST 2.8: Issue Token Fails on Storage Disconnect
   Setup: Server running at 127.0.0.1:5111, but Redis stopped at 127.0.0.1:6379.
   Action:
     1. Call issue_token(User1).
   Assert:
     - Returns Err(TokenServiceError::StorageDisconnected) / raises StorageDisconnectedError.
 
-TEST 2.10: Revoke Token Fails on Storage Disconnect
+TEST 2.9: Revoke Token Fails on Storage Disconnect
   Setup: Server running at 127.0.0.1:5111, but Redis stopped at 127.0.0.1:6379.
   Action:
     1. Call revoke_token(Token16).

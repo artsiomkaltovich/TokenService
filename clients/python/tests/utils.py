@@ -1,7 +1,10 @@
+import asyncio
 import os
+from collections.abc import Generator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Any, cast
+from functools import cached_property, lru_cache
+from typing import Any, TypedDict, cast
 
 import requests
 from testcontainers.core.container import DockerContainer
@@ -13,6 +16,44 @@ DEFAULT_TOKEN_IMAGE = os.environ.get("TOKEN_SERVICE_IMAGE", "tokenservice:local"
 # Default listen ports inside the toxiproxy container; overridable via env
 DEFAULT_GRPC_LISTEN = int(os.environ.get("TOXIPROXY_GRPC_LISTEN_PORT", "15111"))
 DEFAULT_REDIS_LISTEN = int(os.environ.get("TOXIPROXY_REDIS_LISTEN_PORT", "15112"))
+
+
+class ToxicAttributesDict(TypedDict, total=False):
+    # Latency toxic
+    latency: int  # Delay in ms
+    jitter: int  # Variable delay added/subtracted in ms
+
+    # Bandwidth toxic
+    rate: int  # Rate limit in KB/s
+
+    # Slow close toxic
+    delay: int  # Delay before closing socket in ms
+
+    # Slicer toxic
+    average_size: int  # Average size of sliced packets in bytes
+    size_variation: int  # Variation in packet size
+
+    # Limit data toxic
+    bytes: int  # Max bytes before closing connection
+
+    # Timeout toxic
+    timeout: int  # Connection timeout in ms
+
+
+class ToxicDict(TypedDict, total=False):
+    name: str
+    type: str
+    stream: str
+    toxicity: float
+    attributes: ToxicAttributesDict
+
+
+class ProxyDict(TypedDict):
+    name: str
+    listen: str
+    upstream: str
+    enabled: bool
+    toxics: list[ToxicDict]
 
 
 class TokenServiceController:
@@ -63,13 +104,102 @@ class ToxiproxyApi:
         self.delete_proxy = delete_proxy
 
 
+@lru_cache
+def listen_port() -> int:
+    return int(os.environ.get("TOXIPROXY_GRPC_LISTEN_PORT", "15111"))
+
+
+@contextmanager
+def service_proxing(
+    toxiproxy_api: ToxiproxyApi,
+    toxiproxy_container: ToxiproxyContainerAttrs,
+    tokenservice_container: TokenServiceAttrs,
+) -> Generator[tuple[ProxyDict, str], None, None]:
+    api_base = toxiproxy_container.api_base
+    tox_host = toxiproxy_container.host
+
+    proxy_name = "token_grpc_cache_"
+    proxy = toxiproxy_api.create_proxy(
+        api_base,
+        proxy_name,
+        upstream_host=tokenservice_container.internal_host,
+        upstream_port=tokenservice_container.internal_port,
+        listen_port=listen_port(),
+    )
+    try:
+        mapped_port = toxiproxy_container.map_listen_port(listen_port())
+        server_url = f"{tox_host}:{mapped_port}"
+        yield proxy, server_url
+    finally:
+        with suppress(Exception):
+            toxiproxy_api.delete_proxy(api_base, proxy["name"])
+
+
+async def simulate_service_reconnect(
+    toxiproxy_api: ToxiproxyApi,
+    toxiproxy_container: ToxiproxyContainerAttrs,
+    tokenservice_container: TokenServiceAttrs,
+    proxy: ProxyDict,
+    reconnect_duration: float,
+) -> ProxyDict:
+    # Simulate server restart & reconnect by deleting/recreating proxy
+    #
+    # Note: `service_proxing` remove only the proxy it created (by name)
+    # So if proxy name for new proxy is different (e.g. proxy["name"] was assigned)
+    # it could last in container.
+    toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
+    await asyncio.sleep(reconnect_duration)
+    return toxiproxy_api.create_proxy(
+        toxiproxy_container.api_base,
+        proxy["name"],
+        upstream_host=tokenservice_container.internal_host,
+        upstream_port=tokenservice_container.internal_port,
+        listen_port=listen_port(),
+    )
+
+
+@contextmanager
+def redis_proxing(
+    toxiproxy_api: ToxiproxyApi,
+    toxiproxy_container: ToxiproxyContainerAttrs,
+    redis_container: RedisContainerAttrs,
+) -> Generator[ProxyDict, None, None]:
+    api_base = toxiproxy_container.api_base
+    tox_host = toxiproxy_container.host
+    listen_port = int(os.environ.get("TOXIPROXY_REDIS_LISTEN_PORT", "15112"))
+
+    proxy_name = "redis_proxy_drop_"
+    proxy = toxiproxy_api.create_proxy(
+        api_base,
+        proxy_name,
+        upstream_host=redis_container.host,
+        upstream_port=redis_container.port,
+        listen_port=listen_port,
+    )
+    try:
+        mapped_port = toxiproxy_container.map_listen_port(listen_port)
+        redis_url = f"{tox_host}:{mapped_port}"
+        prev_redis = os.environ.get("REDIS_URL")
+        os.environ["REDIS_URL"] = f"redis://{redis_url}"
+        try:
+            yield proxy
+        finally:
+            if prev_redis is None:
+                os.environ.pop("REDIS_URL", None)
+            else:
+                os.environ["REDIS_URL"] = prev_redis
+    finally:
+        with suppress(Exception):
+            toxiproxy_api.delete_proxy(api_base, proxy["name"])
+
+
 def create_proxy(
     api_base: str,
     name: str,
     upstream_host: str,
     upstream_port: int,
     listen_port: int | None = None,
-) -> dict[str, Any]:
+) -> ProxyDict:
     if listen_port is None:
         raise ValueError("listen_port must be provided")
     payload: dict[str, Any] = {
@@ -79,7 +209,7 @@ def create_proxy(
     }
     r = requests.post(f"{api_base}/proxies", json=payload)
     r.raise_for_status()
-    return cast(dict[str, Any], r.json())
+    return cast(ProxyDict, r.json())
 
 
 def add_latency(

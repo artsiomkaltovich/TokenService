@@ -2,6 +2,7 @@
   "name": "TokenService Dev Container (mise)",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
+  "runServices": ["app", "redis"],
   "workspaceFolder": "/workspaces/tokenservice",
   "containerUser": "vscode",
   "remoteUser": "vscode",
