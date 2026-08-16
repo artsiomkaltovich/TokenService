@@ -227,3 +227,16 @@ TEST 3.3: Timeout Does Not Affect Local Cache Hits
     - Cached verification returns VerificationResult::ValidDegraded(User1) without timeout error.
     - Cached verification took less then 1 second to complete.
     - Timeout only applies to network requests, not cache lookups.
+
+TEST 3.4: Timeout on Slow Storage (Redis)
+  Setup: Server running at 127.0.0.1:5111, Redis running with induced artificial delay > timeout value.
+  Action:
+    1. Create TokenServiceClient with timeout=0.5 seconds.
+    2. Call issue_token(User1).
+    3. Call verify_token(returned_token).
+    4. Call revoke_token(returned_token).
+  Assert:
+    - Every request times out after 0.5 seconds (including all backoff/retry attempts).
+    - Every request times out before 1 second (including all backoff/retry attempts).
+    - Every request raises StorageDisconnectedError / returns Err(TokenServiceError::StorageDisconnected) since storage timeout is treated as storage disconnection.
+
