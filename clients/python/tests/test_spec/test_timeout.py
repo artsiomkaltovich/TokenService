@@ -48,7 +48,10 @@ async def test_timeout_on_slow_server(
 ) -> None:
     # TEST 3.2: Timeout on Slow Server
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_timeout_on_slow_server",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         # Add latency > timeout value
         toxiproxy_api.add_latency(
@@ -91,7 +94,10 @@ async def test_timeout_does_not_affect_local_cache_hits(
 ) -> None:
     # TEST 3.3: Timeout Does Not Affect Local Cache Hits
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_timeout_does_not_affect_local_cache_hits",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=1.0, local_cache_ttl=60.0
@@ -124,7 +130,12 @@ async def test_timeout_on_slow_redis(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     # TEST 3.4: Timeout on Slow Storage (Redis)
-    with redis_proxing(toxiproxy_api, toxiproxy_container, redis_container) as proxy:
+    with redis_proxing(
+        "test_timeout_on_slow_redis",
+        toxiproxy_api,
+        toxiproxy_container,
+        redis_container,
+    ) as proxy:
         # Add latency > timeout value
         toxiproxy_api.add_latency(
             toxiproxy_container.api_base, proxy["name"], latency_ms=2000

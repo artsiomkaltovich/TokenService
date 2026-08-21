@@ -111,6 +111,7 @@ def listen_port() -> int:
 
 @contextmanager
 def service_proxing(
+    proxy_name: str,
     toxiproxy_api: ToxiproxyApi,
     toxiproxy_container: ToxiproxyContainerAttrs,
     tokenservice_container: TokenServiceAttrs,
@@ -118,7 +119,6 @@ def service_proxing(
     api_base = toxiproxy_container.api_base
     tox_host = toxiproxy_container.host
 
-    proxy_name = "token_grpc_cache_"
     proxy = toxiproxy_api.create_proxy(
         api_base,
         proxy_name,
@@ -160,6 +160,7 @@ async def simulate_service_reconnect(
 
 @contextmanager
 def redis_proxing(
+    proxy_name: str,
     toxiproxy_api: ToxiproxyApi,
     toxiproxy_container: ToxiproxyContainerAttrs,
     redis_container: RedisContainerAttrs,
@@ -168,7 +169,6 @@ def redis_proxing(
     tox_host = toxiproxy_container.host
     listen_port = int(os.environ.get("TOXIPROXY_REDIS_LISTEN_PORT", "15112"))
 
-    proxy_name = "redis_proxy_drop_"
     proxy = toxiproxy_api.create_proxy(
         api_base,
         proxy_name,

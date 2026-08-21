@@ -10,5 +10,13 @@ uv = "0.12.2"
 "typecheck:python" = "cd clients/python && uv run mypy ."
 "format:python" = "cd clients/python && uv run ruff format . && uv run ruff check --fix ."
 
+"build:rust" = "cd clients/rust && cargo build"
+"test:rust" = "cd clients/rust && cargo test"
+"lint:rust" = "cd clients/rust && cargo clippy --all-targets -- -D warnings"
+"format:rust" = "cd clients/rust && cargo fmt --check"
+
 [tasks."check:python"]
 depends = ["lint:python", "typecheck:python", "test:python"]
+
+[tasks."check:rust"]
+depends = ["build:rust", "format:rust", "lint:rust"]

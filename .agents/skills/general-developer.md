@@ -4,6 +4,10 @@
 
 - Strict KISS principle.
 
+## Documentation Style
+
+- Avoid verbose inline comments. Rely on clear, idiomatic, self-documenting code and types.
+
 ## Dependencies
 
 - Always check for newest version of the tools you are using.

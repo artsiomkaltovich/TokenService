@@ -34,7 +34,10 @@ async def test_local_in_memory_cache_hit(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_local_in_memory_cache_hit",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=5, local_cache_ttl=60.0
@@ -56,7 +59,10 @@ async def test_stream_outage_and_safety_ttl_eviction(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_stream_outage_and_safety_ttl_eviction",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=5, local_cache_ttl=1.0
@@ -78,7 +84,10 @@ async def test_client_grpc_stream_auto_reconnect(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_client_grpc_stream_auto_reconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=5, backoff_max_delay=1
@@ -116,7 +125,10 @@ async def test_uncached_verify_miss_fails_on_service_disconnect(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_uncached_verify_miss_fails_on_service_disconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=5
@@ -134,7 +146,10 @@ async def test_issue_token_fails_on_service_disconnect(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_issue_token_fails_on_service_disconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=5
@@ -152,7 +167,10 @@ async def test_revoke_token_fails_on_service_disconnect(
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
     with service_proxing(
-        toxiproxy_api, toxiproxy_container, tokenservice_container
+        "test_revoke_token_fails_on_service_disconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        tokenservice_container,
     ) as (proxy, server_url):
         async with TokenServiceClient[Token16](
             server_url=server_url, timeout=5
@@ -160,7 +178,7 @@ async def test_revoke_token_fails_on_service_disconnect(
             # Simulate server stop by deleting the proxy before calling revoke_token
             toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
             with pytest.raises(ServiceDisconnectedError):
-                await client.verify_token(Token16(b"0" * 16))
+                await client.revoke_token(Token16(b"0" * 16))
 
 
 @pytest.mark.asyncio
@@ -170,13 +188,18 @@ async def test_uncached_verify_miss_fails_on_storage_disconnect(
     redis_container: RedisContainerAttrs,
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
-    with redis_proxing(toxiproxy_api, toxiproxy_container, redis_container) as proxy:
+    with redis_proxing(
+        "test_uncached_verify_miss_fails_on_storage_disconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        redis_container,
+    ) as proxy:
         # Simulate storage stop by deleting the proxy before calling verify
-        toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
         async with TokenServiceClient[Token16](
             server_url=tokenservice_container.host_url,
             timeout=1.0,
         ) as client:
+            toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
             with pytest.raises(StorageDisconnectedError):
                 await client.verify_token(Token16(b"0" * 16))
 
@@ -188,13 +211,17 @@ async def test_issue_token_fails_on_storage_disconnect(
     redis_container: RedisContainerAttrs,
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
-    with redis_proxing(toxiproxy_api, toxiproxy_container, redis_container) as proxy:
-        toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
-
+    with redis_proxing(
+        "test_issue_token_fails_on_storage_disconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        redis_container,
+    ) as proxy:
         async with TokenServiceClient[Token16](
             server_url=tokenservice_container.host_url,
             timeout=1.0,
         ) as client:
+            toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
             with pytest.raises(StorageDisconnectedError):
                 await client.issue_token(user_id=TEST_USER_ID)
 
@@ -206,12 +233,16 @@ async def test_revoke_token_fails_on_storage_disconnect(
     redis_container: RedisContainerAttrs,
     tokenservice_container: TokenServiceAttrs,
 ) -> None:
-    with redis_proxing(toxiproxy_api, toxiproxy_container, redis_container) as proxy:
-        # Simulate storage stop by deleting the proxy before calling revoke_token
-        toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
+    with redis_proxing(
+        "test_revoke_token_fails_on_storage_disconnect",
+        toxiproxy_api,
+        toxiproxy_container,
+        redis_container,
+    ) as proxy:
         async with TokenServiceClient[Token16](
             server_url=tokenservice_container.host_url,
             timeout=1.0,
         ) as client:
+            toxiproxy_api.delete_proxy(toxiproxy_container.api_base, proxy["name"])
             with pytest.raises(StorageDisconnectedError):
                 await client.verify_token(Token16(b"0" * 16))
