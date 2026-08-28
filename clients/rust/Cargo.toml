@@ -1,0 +1,15 @@
+[package]
+name = "token-service-client"
+version = "0.1.0"
+edition = "2021"
+description = "TokenService Rust Client SDK"
+
+[dependencies]
+thiserror = ">=2.0.0, <3.0.0"
+tokio = { version = ">=1.40.0, <2.0.0", features = ["macros", "rt", "rt-multi-thread", "time", "sync"] }
+
+[dev-dependencies]
+reqwest = { version = ">=0.12.0, <0.13.0", features = ["json", "blocking"] }
+serde = { version = ">=1.0.0, <2.0.0", features = ["derive"] }
+serde_json = ">=1.0.0, <2.0.0"
+uuid = { version = ">=1.10.0, <2.0.0", features = ["v4"] }
