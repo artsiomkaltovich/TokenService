@@ -1,5 +1,5 @@
-===============================================================================
 TOKENSERVICE TEST SCENARIOS SPECIFICATION
+===============================================================================
 ===============================================================================
 
 ENVIRONMENT & CONFIGURATION
@@ -239,4 +239,3 @@ TEST 3.4: Timeout on Slow Storage (Redis)
     - Every request times out after 0.5 seconds (including all backoff/retry attempts).
     - Every request times out before 1 second (including all backoff/retry attempts).
     - Every request raises StorageDisconnectedError / returns Err(TokenServiceError::StorageDisconnected) since storage timeout is treated as storage disconnection.
-

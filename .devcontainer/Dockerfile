@@ -22,7 +22,8 @@ RUN curl https://mise.jdx.dev/install.sh | sh
 # RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 # RUN curl -fsSL https://gh.io/copilot-install | bash
 # RUN curl -fsSL https://chatgpt.com/codex/install.sh | sh
-RUN curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+# RUN curl -fsS https://cursor.com/install | bash
+# RUN curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
 
 # Trust workspace config and create initial lock file
 COPY --chown=vscode:vscode mise.toml /home/vscode/mise.toml
